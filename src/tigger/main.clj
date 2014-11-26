@@ -3,52 +3,82 @@
             [tigger.http :as http]
             [clojure.core.async :refer [<!!]]
             [taoensso.timbre :as timbre]
-            [environ.core :refer [env]]
-            ))
+            [environ.core :refer [env]])
+  (:use [clojure.pprint])
+  (:import [java.util Properties]
+           [java.io ByteArrayInputStream]
+           [javax.mail Session]
+           [javax.mail.internet MimeMessage MimeUtility]
+           [javax.mail.internet InternetAddress]))
 
 (defn exit [status msg]
   (println msg)
   (System/exit status))
 
-(defn trimReturnBeforeSubject [^CharSequence s]
-  (loop [index -1]
-    (let [len (.length s)
-          ch (.charAt s (inc index))]
-      (if (or (= ch \newline) (= ch \return))
-        (recur (inc index))
-        (.. s (subSequence (+ index 1) len) toString)))))
-
-(defn splitSubjectBody [x]
-  (let [body (:body x)
-        lines (clojure.string/split-lines body)
-        strSubject (nth (filter #(.startsWith % "Subject: ") lines) 0)]
-    {:subject (subs strSubject (.length "Subject: "))
-     :body (clojure.string/trim-newline (trimReturnBeforeSubject (subs body (+
-                       (.indexOf body strSubject)
-                       (.length strSubject)))))}
-    ))
-
 (defn sendSlackItemCB [status res]
   (timbre/info "Status:" status ", Response:" res))
 
-(defn sendSlackPost [strUrl from subj body]
+(defn sendSlackPost [strUrl date from subj body]
   (let [subject (str "*" subj "*")]
     (http/postItem strUrl
                    {:username "MailGhost"
-                    :text (str from "\n" subject "\n```" body "\n```")
+                    :text (str "From:" from "  (" date ")\n" subject "\n```" body "\n```")
                     :icon_emoji ":ghost:"}
                    sendSlackItemCB)))
 
+; from contrib?
+(defn as-properties [m]
+  (let [p (Properties.)]
+    (doseq [[k v] m]
+      (.setProperty p (str k) (str v))) p))
+
+; ???
+(def session
+    (Session/getDefaultInstance
+    (as-properties [["mail.store.protocol" "imaps"]])))
+
+; MimeMessage
+(defn get-message [x]
+    ;(bean
+     (MimeMessage. session (ByteArrayInputStream. (.getBytes x))))
+
+; https://github.com/owainlewis/clojure-mail/blob/master/src/clojure_mail/message.clj
+(defn- multipart? [m]
+  (.startsWith (.getContentType m) "multipart"))
+
+(defn- read-multi [mime-multi-part]
+  (let [count (.getCount mime-multi-part)]
+    (for [part (map #(.getBodyPart mime-multi-part %) (range count))]
+      (if (multipart? part)
+        (.getContent part)
+        part))))
+
+(defn- message-parts [^javax.mail.internet.MimeMultipart msg]
+  (if (multipart? msg)
+    (read-multi (.getContent msg))))
+
 (defn -main []
- ; (print "env:" (:env config))
+  ;(print "env:" (:env env))
   (let [ch (listen 2500)
         strUrl (-> env :env :slack-webhook-url)]
     (if (nil? strUrl)
       (exit 1 (str "Please make profiles.clj with :slack-webhook-url param!")))
     (while true
       (let [objMsg (<!! ch)
-            objSB (splitSubjectBody objMsg)]
-        (println (pr-str objMsg))
-        ;(println objMsg)
-        (sendSlackPost strUrl (:from objMsg) (:subject objSB) (:body objSB))
-        ))))
+            objMimeMsg (get-message (:body objMsg))]
+        (if (multipart? objMimeMsg)
+          (sendSlackPost strUrl
+                         (.getSentDate objMimeMsg)
+                         (MimeUtility/decodeText
+                          (InternetAddress/toString (.getFrom objMimeMsg)))
+                         (.getSubject objMimeMsg)
+                         (apply str (filter (fn [c] (not= c \return))
+                          (.getContent (nth (message-parts objMimeMsg) 0)))) )
+          (sendSlackPost strUrl
+                         (.getSentDate objMimeMsg)
+                         (MimeUtility/decodeText
+                          (InternetAddress/toString (.getFrom objMimeMsg)))
+                         (.getSubject objMimeMsg)
+                         (apply str (filter (fn [c] (not= c \return))
+                          (.getContent objMimeMsg))) )
+        )))))
