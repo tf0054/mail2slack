@@ -1,11 +1,15 @@
 (ns mail2slack.main
   (:require [tigger.core :refer [listen]]
             [clojure.core.async :refer [<!!]]
+            [clj-time.core :as jodat]
+            [clj-time.coerce :as jodac]
             [taoensso.timbre :as timbre]
             [environ.core :refer [env]]
             [mail2slack.http :as http])
   (:use [clojure.pprint])
-  (:import [java.util Properties]
+  (:import [java.util Date]
+           [org.joda.time.format DateTimeFormat]
+           [java.util Properties]
            [java.io ByteArrayInputStream]
            [javax.mail Session]
            [javax.mail.internet MimeMessage MimeUtility]
@@ -18,15 +22,21 @@
 (defn substring? [sub st]
   (not= (.indexOf st sub) -1))
 
+(defn date2joda [date] (if (instance? Date date) (jodac/from-date date) date))
+
 (defn sendSlackPostCB [x]
   (timbre/info "Status:" (:status x) ", Response:" (:body x) ", From:" (:from x)))
 
 (defn sendSlackPost [strUrl date from subj body]
-  (let [subject (str "*" subj "*")]
+  (let [subject (str "*" subj "*")
+        jstDate (jodat/to-time-zone (date2joda date)
+                                    (jodat/time-zone-for-id "Asia/Tokyo"))]
     (http/postItem strUrl
                    {:username "mail2slack"
                     :icon_emoji ":ghost:"
-                    :text (str "From:" from "  (" date ")\n" subject "\n```" body "\n```")}
+                    :text (str "From:" from "  ("
+                               (.toString jstDate (DateTimeFormat/fullDateTime))
+                               ")\n" subject "\n```" body "\n```")}
                    sendSlackPostCB
                    {:from from})))
 
