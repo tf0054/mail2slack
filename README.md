@@ -1,24 +1,16 @@
 
-# Tigger, SMTP to core.async Channel Receiver
+# mail2slack
 
-Tigger provides an [SMTP server](https://code.google.com/p/subethasmtp/) that
-routes messages to a [core.async](https://github.com/clojure/core.async) channel
-as Clojure data structures.
+A smtp server which converts emails to slack msg via slack's webhook interface.
+Made with [Tigger](https://github.com/rodnaph/tigger).
 
 ## Usage
 
-To start a server you use the _listen_ function, which will return a channel
-that you can read from.  This is an example which prints all messages that
-are received.
+The address for receiving emails are hard coded on main.clj.
+Some parameters like the port number should be set by [environ](https://github.com/weavejester/environ)
 
-```clojure
-(ns my.project
-  (:require [tigger.core :refer [listen]]
-            [clojure.core.async :refer [<!!]]))
 
-(defn -main []
-  (let [ch (listen 25)]
-    (while true
-      (println (pr-str (<!! ch))))))
+```
+nohup lein run
 ```
 
