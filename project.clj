@@ -9,5 +9,8 @@
                  [clj-time "0.8.0"]
                  [environ "1.0.0"]
                  [javax.mail/mail "1.4"]]
+  :daemon {:mail2slack {:ns mail2slack.main
+                        :pidfile "mail2slack.pid"}}
+  :plugins [[lein-daemon "0.5.4"]]
   :main mail2slack.main)
 

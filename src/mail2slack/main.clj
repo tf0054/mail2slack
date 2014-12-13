@@ -1,12 +1,12 @@
 (ns mail2slack.main
+  (:use [clojure.pprint])
   (:require [tigger.core :refer [listen]]
             [clojure.core.async :refer [<!!]]
+            [environ.core :refer [env]]
             [clj-time.core :as jodat]
             [clj-time.coerce :as jodac]
             [taoensso.timbre :as timbre]
-            [environ.core :refer [env]]
             [mail2slack.http :as http])
-  (:use [clojure.pprint])
   (:import [java.util Date]
            [org.joda.time.format DateTimeFormat]
            [java.util Properties]
