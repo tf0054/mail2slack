@@ -76,13 +76,17 @@
     msg))
 
 (defn -main []
-  ;(print "env:" (:env env))
+  ; checking
+  (if (nil? (env :env))
+    (exit 1 (str "Please make profiles.clj with :slack-webhook-url param!")))
+  ;
   (let [ch (listen (-> env :env :mail2slack-port))
         strUrl (-> env :env :slack-webhook-url)]
-    (if (nil? strUrl)
-      (exit 1 (str "Please make profiles.clj with :slack-webhook-url param!")))
-    ;
     (timbre/info "Starting listening on:" (-> env :env :mail2slack-port))
+    (.addShutdownHook ; needs "lein trampoline run" why?
+     (Runtime/getRuntime)
+     (Thread. #(timbre/info "Shutdowning successfully.")))
+    ;
     (while true
       (let [objMsg (<!! ch)
             objMimeMsg (get-message (:body objMsg))
@@ -106,3 +110,4 @@
                            (apply str (filter (fn [c] (not= c \return))
                                               (.getContent objMimeMsg))) ))
           (timbre/info "Invalid Rcpts:" (clojure.string/join "," strRcpts)) )))))
+

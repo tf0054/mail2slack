@@ -1,14 +1,12 @@
 
 # mail2slack
 
-A smtp server which converts emails to [slack](http://slack.com/) msg via slack's webhook interface.
+A smtp server which converts emails to [slack](http://slack.com/) msg via it's webhook interface.
 Made with [Tigger](https://github.com/rodnaph/tigger).
 
 ## Usage
 
-The address for receiving emails are hard coded on main.clj.
-Some parameters like the port number should be set by [environ](https://github.com/weavejester/environ)
-
+You can start mail2slack as a daemon via `lein daemon start mail2slack`.
 
 ```
 [root@ip-xxx mail2slack]# lein daemon start mail2slack
@@ -24,4 +22,18 @@ mail2slack started
 [root@ip-xxx mail2slack]#
 ```
 
-The [lein-daemon](https://github.com/arohner/lein-daemon) is used for deamonize. The log can be seen on the project directory.
+Some parameters like the port number should be set by [environ](https://github.com/weavejester/environ).
+It is deprecated, but You can define requisite params in **.lein-env** placed at the project directory.
+
+```
+[root@ip-xxx mail2slack]# cat .lein-env
+{:env{
+:mail2slack-port 2500
+:slack-webhook-url "https://hooks.slack.com/services/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"
+}}
+[root@ip-xxx mail2slack]#
+```
+
+The [lein-daemon](https://github.com/arohner/lein-daemon) is used for deamonize. So you can find log file and pid file at the project directory.
+
+So far addresses for receiving emails are hard coded on [main.clj](https://github.com/tf0054/mail2slack/blob/master/src/mail2slack/main.clj).
