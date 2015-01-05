@@ -1,6 +1,7 @@
 (ns mail2slack.main
   (:use [clojure.pprint])
-  (:require [tigger.core :refer [listen]]
+  (:require [clojure.string :as string]
+            [tigger.core :refer [listen]]
             [clojure.core.async :refer [<!!]]
             [environ.core :refer [env]]
             [clj-time.core :as jodat]
@@ -51,7 +52,13 @@
   (Session/getDefaultInstance
     (as-properties [["mail.store.protocol" "imaps"]])))
 
-(defn- get-to [m]
+(defn- get-from [m]
+  (let [strFrom (InternetAddress/toString (.getFrom m))]
+    (if (not (string/blank? strFrom))
+      (MimeUtility/decodeText strFrom)
+      (timbre/info "No from address cound be gotten:" (.getFrom m)))))
+
+(defn- get-tos [m]
   (map str
     (.getRecipients m javax.mail.Message$RecipientType/TO)))
 
@@ -90,24 +97,27 @@
     (while true
       (let [objMsg (<!! ch)
             objMimeMsg (get-message (:body objMsg))
-            strFrom (MimeUtility/decodeText
-                     (InternetAddress/toString (.getFrom objMimeMsg)))
-            strRcpts (get-to objMimeMsg)]
-        (if (not (every? false? (map #(or
+            strFrom (get-from objMimeMsg)
+            strRcpts (get-tos objMimeMsg)]
+        ;
+        (if (nil? strFrom)
+          (timbre/info "Invalid From: nil"))
+        (if (every? false? (map #(or
                                        (substring? "support@" %)
-                                       (substring? "tf0054@" %)) strRcpts)))
-          (if (multipart? objMimeMsg)
-            (sendSlackPost strUrl
-                           (.getSentDate objMimeMsg)
-                           strFrom
-                           (.getSubject objMimeMsg)
-                           (apply str (filter (fn [c] (not= c \return))
-                                              (.getContent (nth (message-parts objMimeMsg) 0)))) )
-            (sendSlackPost strUrl
-                           (.getSentDate objMimeMsg)
-                           strFrom
-                           (.getSubject objMimeMsg)
-                           (apply str (filter (fn [c] (not= c \return))
-                                              (.getContent objMimeMsg))) ))
-          (timbre/info "Invalid Rcpts:" (clojure.string/join "," strRcpts)) )))))
+                                       (substring? "tf0054@" %)) strRcpts))
+          (timbre/info "Invalid Rcpts:" (clojure.string/join "," strRcpts)))
+        ;
+        (if (multipart? objMimeMsg)
+          (sendSlackPost strUrl
+                         (.getSentDate objMimeMsg)
+                         strFrom
+                         (.getSubject objMimeMsg)
+                         (apply str (filter (fn [c] (not= c \return))
+                                            (.getContent (nth (message-parts objMimeMsg) 0)))) )
+          (sendSlackPost strUrl
+                         (.getSentDate objMimeMsg)
+                         strFrom
+                         (.getSubject objMimeMsg)
+                         (apply str (filter (fn [c] (not= c \return))
+                                            (.getContent objMimeMsg))) )) ))))
 
