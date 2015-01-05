@@ -41,6 +41,16 @@
                    sendSlackPostCB
                    {:from from})))
 
+(defn- get-from [m]
+  (let [strFrom (InternetAddress/toString (.getFrom m))]
+    (if (not (string/blank? strFrom))
+      (MimeUtility/decodeText strFrom)
+      (timbre/info "No from address cound be gotten:" (.getFrom m)))))
+
+(defn- get-tos [m]
+  (map str
+    (.getRecipients m javax.mail.Message$RecipientType/TO)))
+
 ; from contrib?
 (defn as-properties [m]
   (let [p (Properties.)]
@@ -51,16 +61,6 @@
 (def session
   (Session/getDefaultInstance
     (as-properties [["mail.store.protocol" "imaps"]])))
-
-(defn- get-from [m]
-  (let [strFrom (InternetAddress/toString (.getFrom m))]
-    (if (not (string/blank? strFrom))
-      (MimeUtility/decodeText strFrom)
-      (timbre/info "No from address cound be gotten:" (.getFrom m)))))
-
-(defn- get-tos [m]
-  (map str
-    (.getRecipients m javax.mail.Message$RecipientType/TO)))
 
 ; MimeMessage
 (defn- get-message [x]
@@ -100,11 +100,11 @@
             strFrom (get-from objMimeMsg)
             strRcpts (get-tos objMimeMsg)]
         ;
-        (if (nil? strFrom)
+        (if (nil? strFrom) ; is this needed?
           (timbre/info "Invalid From: nil"))
         (if (every? false? (map #(or
-                                       (substring? "support@" %)
-                                       (substring? "tf0054@" %)) strRcpts))
+                                  (substring? "support@" %)
+                                  (substring? "tf0054@" %)) strRcpts))
           (timbre/info "Invalid Rcpts:" (clojure.string/join "," strRcpts)))
         ;
         (if (multipart? objMimeMsg)
