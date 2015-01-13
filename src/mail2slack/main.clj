@@ -1,13 +1,14 @@
 (ns mail2slack.main
   (:use [clojure.pprint])
   (:require [clojure.string :as string]
+            [clj-time.core :as jodat]
             [tigger.core :refer [listen]]
             [clojure.core.async :refer [<!!]]
             [environ.core :refer [env]]
-            [clj-time.core :as jodat]
             [clj-time.coerce :as jodac]
             [taoensso.timbre :as timbre]
-            [mail2slack.http :as http])
+            [mail2slack.http :as http]
+            [mail2slack.logging])
   (:import [java.util Date]
            [org.joda.time.format DateTimeFormat]
            [java.util Properties]
@@ -45,7 +46,7 @@
   (let [strFrom (InternetAddress/toString (.getFrom m))]
     (if (not (string/blank? strFrom))
       (MimeUtility/decodeText strFrom)
-      (timbre/info "No from address cound be gotten:" (.getFrom m)))))
+      (timbre/info "No from address cound be gotten:" (.getFrom m))))) ;timbre/info returns nil
 
 (defn- get-tos [m]
   (map str
@@ -71,7 +72,9 @@
   (.startsWith (.getContentType m) "multipart"))
 
 (defn- read-multi [mime-multi-part]
-  (let [count (.getCount mime-multi-part)]
+  (let [count (try (.getCount mime-multi-part)
+                (catch Exception e
+                  (timbre/warn "Catched exception:" (.getMessage e))))]
     (for [part (map #(.getBodyPart mime-multi-part %) (range count))]
       (if (multipart? part)
         (.getContent part)
