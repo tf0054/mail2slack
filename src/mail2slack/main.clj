@@ -43,14 +43,16 @@
                    {:from from})))
 
 (defn- get-from [m]
-  (let [strFrom (InternetAddress/toString (.getFrom m))]
+  (let [strFrom (try (InternetAddress/toString (.getFrom m))
+                  (catch Exception e
+                    (timbre/warn "Catched exception:" (.getMessage e))))]
     (if (not (string/blank? strFrom))
-      (MimeUtility/decodeText strFrom)
-      (timbre/info "No from address cound be gotten:" (.getFrom m))))) ;timbre/info returns nil
+      (MimeUtility/decodeText strFrom) nil)))
+;      (timbre/info "No from address cound be gotten:" (.getFrom m))))) ;timbre/info returns nil
 
 (defn- get-tos [m]
-  (map str
-    (.getRecipients m javax.mail.Message$RecipientType/TO)))
+  (try (map str (.getRecipients m javax.mail.Message$RecipientType/TO))
+    (catch Exception e nil)))
 
 ; from contrib?
 (defn as-properties [m]
@@ -65,7 +67,8 @@
 
 ; MimeMessage
 (defn- get-message [x]
-  (MimeMessage. session (ByteArrayInputStream. (.getBytes x))))
+  (try (MimeMessage. session (ByteArrayInputStream. (.getBytes x)))
+    (catch Exception e nil)))
 
 ; https://github.com/owainlewis/clojure-mail/blob/master/src/clojure_mail/message.clj
 (defn- multipart? [m]
@@ -108,25 +111,28 @@
             seqRcpts (get-tos objMimeMsg) ; body-to/cc
             objDate (.getSentDate objMimeMsg)]
         ;
-        (if (nil? strFrom) ; is this needed?
-          (timbre/info "Cannot detect Sender: nil")
+        (if (nil? objMimeMsg)
+          (timbre/info "Cannot find vaild msgbody: from" strFrom)
           ;
-          (if (not (vaildAddr '("tf0054@" "support@") seqRcpts))
-            (timbre/info "Cannot find valid Rcpts:" (clojure.string/join "," seqRcpts))
+          (if (nil? strFrom) ; is this needed?
+            (timbre/info "Cannot detect Sender: nil")
             ;
-            (if (nil? objDate)
-              (timbre/info "Cannot find date: from" strFrom)
+            (if (not (vaildAddr '("tf0054@" "support@") seqRcpts))
+              (timbre/info "Cannot find valid Rcpts:" (clojure.string/join "," seqRcpts))
               ;
-              (if (multipart? objMimeMsg)
-                (sendSlackPost strUrl
-                               objDate
-                               strFrom
-                               (.getSubject objMimeMsg)
-                               (apply str (filter (fn [c] (not= c \return))
-                                                  (.getContent (nth (message-parts objMimeMsg) 0)))) )
-                (sendSlackPost strUrl
-                               objDate
-                               strFrom
-                               (.getSubject objMimeMsg)
-                               (apply str (filter (fn [c] (not= c \return))
-                                                  (.getContent objMimeMsg)))) )))) )) ))
+              (if (nil? objDate)
+                (timbre/info "Cannot find date: from" strFrom)
+                ;
+                (if (multipart? objMimeMsg)
+                  (sendSlackPost strUrl
+                                 objDate
+                                 strFrom
+                                 (.getSubject objMimeMsg)
+                                 (apply str (filter (fn [c] (not= c \return))
+                                                    (.getContent (nth (message-parts objMimeMsg) 0)))) )
+                  (sendSlackPost strUrl
+                                 objDate
+                                 strFrom
+                                 (.getSubject objMimeMsg)
+                                 (apply str (filter (fn [c] (not= c \return))
+                                                    (.getContent objMimeMsg)))) ))))) )) ))
